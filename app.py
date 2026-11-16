@@ -14,7 +14,7 @@ from src.models import CustomerRequest, OpportunityStatus
 from src.agent_controller import MinhAnB2BAgent
 from src.config import (
     SAMPLE_REQUESTS_PATH, SUMMARY_DASHBOARD_PATH, AUDIT_LOG_PATH,
-    DOSSIERS_DIR, DRAFT_EMAILS_DIR, APPROVAL_TICKETS_DIR
+    DOSSIERS_DIR, DRAFT_EMAILS_DIR, APPROVAL_TICKETS_DIR, REPO_OUTPUT_DIR
 )
 
 app = FastAPI(title="Minh An Technology - AI Agent B2B Sales API", version="1.0.0")
@@ -40,9 +40,10 @@ class ProcessRequestInput(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    html_path = BASE_DIR / "web" / "index.html"
-    if html_path.exists():
-        return html_path.read_text(encoding="utf-8")
+    for rel_path in ["index.html", "public/index.html", "web/index.html"]:
+        p = BASE_DIR / rel_path
+        if p.exists():
+            return p.read_text(encoding="utf-8")
     return "<h1>Minh An AI Agent Server Running</h1>"
 
 @app.get("/api/data")
@@ -96,22 +97,40 @@ def get_data():
 
 @app.get("/api/audit", response_class=PlainTextResponse)
 def get_audit_log():
-    if AUDIT_LOG_PATH.exists():
-        return AUDIT_LOG_PATH.read_text(encoding="utf-8")
+    for p in [AUDIT_LOG_PATH, REPO_OUTPUT_DIR / "logs" / "execution_audit.log"]:
+        if p.exists():
+            return p.read_text(encoding="utf-8")
     return "Chưa có log kiểm toán."
 
 @app.get("/api/doc", response_class=PlainTextResponse)
 def get_doc(type: str = Query(...), id: str = Query(...)):
-    target_path = None
+    clean_id = id.replace("OPP-", "")
+    candidates = []
     if type == "dossier":
-        target_path = DOSSIERS_DIR / f"Dossier_{id}.md"
+        candidates = [
+            DOSSIERS_DIR / f"Dossier_{id}.md",
+            REPO_OUTPUT_DIR / "dossiers" / f"Dossier_{id}.md",
+            DOSSIERS_DIR / f"Dossier_OPP-{clean_id}.md",
+            REPO_OUTPUT_DIR / "dossiers" / f"Dossier_OPP-{clean_id}.md"
+        ]
     elif type == "email":
-        target_path = DRAFT_EMAILS_DIR / f"Email_{id}.txt"
+        candidates = [
+            DRAFT_EMAILS_DIR / f"Email_{id}.txt",
+            REPO_OUTPUT_DIR / "draft_emails" / f"Email_{id}.txt",
+            DRAFT_EMAILS_DIR / f"Email_OPP-{clean_id}.txt",
+            REPO_OUTPUT_DIR / "draft_emails" / f"Email_OPP-{clean_id}.txt"
+        ]
     elif type == "ticket":
-        target_path = APPROVAL_TICKETS_DIR / f"Ticket_TICKET-{id}.md"
+        candidates = [
+            APPROVAL_TICKETS_DIR / f"Ticket_TICKET-{id}.md",
+            REPO_OUTPUT_DIR / "approval_tickets" / f"Ticket_TICKET-{id}.md",
+            APPROVAL_TICKETS_DIR / f"Ticket_TICKET-OPP-{clean_id}.md",
+            REPO_OUTPUT_DIR / "approval_tickets" / f"Ticket_TICKET-OPP-{clean_id}.md"
+        ]
 
-    if target_path and target_path.exists():
-        return target_path.read_text(encoding="utf-8")
+    for c in candidates:
+        if c.exists():
+            return c.read_text(encoding="utf-8")
     raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
 
 @app.post("/api/process")
